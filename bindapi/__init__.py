@@ -7,7 +7,8 @@ import os
 
 from pathlib import Path
 from collections import defaultdict
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi.security.api_key import APIKey, APIKeyHeader
 from pydantic import BaseModel
 
 
@@ -29,8 +30,17 @@ API_KEYS      = {
 app = FastAPI()
 
 
+# Set up API Key authorization
+api_key_header = APIKeyHeader(name='access_token')
+async def check_api_key(api_key_header: str = Security(api_key_header)) -> str:
+    try:
+        return API_KEYS[api_key_header]
+    except KeyError:
+        raise HTTPException(401, 'invalid api key')
+
+
 @app.get('/dns/zone/{zone_name}')
-def get_zone(zone_name: str):
+def get_zone(zone_name: str, api_key_name: APIKey = Depends(check_api_key)):
     '''Get the json representation of a whole dns zone using 
     axfr
     '''
@@ -38,12 +48,9 @@ def get_zone(zone_name: str):
         zone_name = f'{zone_name}.'
 
     if zone_name not in VALID_ZONES:
-        return HTTPException(400, 'zone file not permitted')
+        raise HTTPException(400, 'zone file not permitted')
     
-    try:
-        zone = dns.zone.from_xfr(dns.query.xfr(DNS_SERVER, zone_name))
-    except dns.exception.FormError:
-        return {'error': zone_name}
+    zone = dns.zone.from_xfr(dns.query.xfr(DNS_SERVER, zone_name))
     
     result = {}
     records = defaultdict(list)
