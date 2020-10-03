@@ -10,6 +10,7 @@ import os
 import functools
 import traceback
 import pathlib
+import logging
 from typing import Optional, List, Tuple
 from enum import Enum
 from collections import defaultdict
@@ -22,12 +23,25 @@ from pydantic import BaseModel, Field
 DNS_SERVER    = os.environ['BIND_SERVER']
 TSIG = dns.tsigkeyring.from_text({os.environ['TSIG_USERNAME']: os.environ['TSIG_PASSWORD']})
 VALID_ZONES   = [i + '.' for i in os.environ['BIND_ALLOWED_ZONES'].split(',')]
-# RECORD_TYPES  = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA']
 API_KEYS      = {
     x.split(',', maxsplit=1)[1]: x.split(',', maxsplit=1)[0]
     for x in 
     filter(lambda x: x[0] != '#', pathlib.Path(os.environ['API_KEY_FILE']).read_text().split('\n'))
 }
+
+
+# Set up logging
+auditlogger = logging.getLogger('bind-api.audit')
+auditlogger.setLevel(logging.INFO)
+auditlogger.addHandler(logging.handlers.TimedRotatingFileHandler(
+    'dns-api-audit.log', when='M', interval=5
+))
+logger = logging.getLogger('bind-api')
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.handlers.RotatingFileHandler(
+    'dns-api-debug.log', maxBytes=(1024 * 1024 * 100), backupCount=10
+))
+logger.debug('starting up')
 
 # Allowed record types
 class RecordType(str, Enum):
@@ -38,6 +52,7 @@ class RecordType(str, Enum):
     ns = 'NS'
     txt = 'TXT'
     soa = 'SOA'
+
 # Record
 class Record(BaseModel):
     response: str = Field(..., example='10.9.1.135')
@@ -57,8 +72,7 @@ app = FastAPI()
 
 
 # Set up API Key authorization
-api_key_header = APIKeyHeader(name='access_token')
-async def check_api_key(api_key_header: str = Security(api_key_header)) -> str:
+async def check_api_key(api_key_header: str = Security(APIKeyHeader(name='X-Api-Key'))) -> str:
     try:
         return API_KEYS[api_key_header]
     except KeyError:
@@ -70,6 +84,8 @@ def get_zone(zone_name: str = Path(..., example='example.org.'), api_key_name: A
     '''Get the json representation of a whole dns zone using 
     axfr
     '''
+    logger.debug(f'api key {api_key_name} requested zone {zone_name}')
+
     zone_name = qualify(zone_name)
 
     if zone_name not in VALID_ZONES:
@@ -96,13 +112,14 @@ def get_zone(zone_name: str = Path(..., example='example.org.'), api_key_name: A
                 'TTL': ttl,
             })
     result['records'] = records
+    logger.debug(f'api key {api_key_name} requested zone {zone_name} - sending zone')
     return result
 
 
 @app.get('/dns/record/{domain}')
 async def get_record(domain: str = Path(..., example='server.example.org.'), record_type: List[RecordType] = Query(list(RecordType)), api_key_name: APIKey = Depends(check_api_key)):
-    if not domain.endswith('.'):  # make sure the domain is qualified
-        domain = f'{domain}.'
+    domain = qualify(domain)
+    logger.debug(f'api key {api_key_name} requested domain records {domain} with types {record_type}')
 
     if not domain.endswith(tuple(VALID_ZONES)):
         raise HTTPException(400, 'domain not permitted')
@@ -136,13 +153,18 @@ async def create_record(
             api_key_name: APIKey = Depends(check_api_key),
         ):
     domain, action = helper
-
-    action.add(dns.name.from_text(domain), record.ttl, record.rrtype, record.response)
     try:
-        await tcpquery(action)
-    except Exception:
-        traceback.print_exc()
-        raise HTTPException(500, 'DNS transaction failed - check logs')
+        action.add(dns.name.from_text(domain), record.ttl, record.rrtype, record.response)
+        try:
+            await tcpquery(action)
+        except Exception:
+            logger.debug(traceback.format_exc())
+            raise HTTPException(500, 'DNS transaction failed - check logs')
+
+        auditlogger.info(f'create {record} for key {api_key_name} on domain {domain}')
+    except:
+        auditlogger.error(f'FAILED: create {record} for key {api_key_name} on domain {domain}')
+        raise
 
 
 @app.put('/dns/record/{domain}')
@@ -153,13 +175,17 @@ async def replace_record(
         ):
     domain, action = helper
 
-    action.replace(dns.name.from_text(domain), record.ttl, record.rrtype, record.response)
     try:
-        await tcpquery(action)
-    except Exception:
-        traceback.print_exc()
-        raise HTTPException(500, 'DNS transaction failed - check logs')
-
+        action.replace(dns.name.from_text(domain), record.ttl, record.rrtype, record.response)
+        try:
+            await tcpquery(action)
+        except Exception:
+            logger.debug(traceback.format_exc())
+            raise HTTPException(500, 'DNS transaction failed - check logs')
+        auditlogger.info(f'replace {record} for key {api_key_name} on domain {domain}')
+    except:
+        auditlogger.error(f'FAILED: replace {record} for key {api_key_name} on domain {domain}')
+        raise
 
 @app.delete('/dns/record/{domain}')
 async def delete_record(
@@ -169,11 +195,16 @@ async def delete_record(
         ):
     domain, action = helper
 
-    for t in record_type:
-        print(f'deleteing {domain} type {t}')
-        action.delete(dns.name.from_text(domain).labels[0].decode(), t)
-        try:
-            await tcpquery(action)
-        except Exception:
-            traceback.print_exc()
-            raise HTTPException(500, 'DNS transaction failed - check logs')
+    try:
+        for t in record_type:
+            print(f'deleteing {domain} type {t}')
+            action.delete(dns.name.from_text(domain).labels[0].decode(), t)
+            try:
+                await tcpquery(action)
+            except Exception:
+                logger.debug(traceback.format_exc())
+                raise HTTPException(500, 'DNS transaction failed - check logs')
+        auditlogger.info(f'delete {record_type} for key {api_key_name} on domain {domain}')
+    except:
+        auditlogger.error(f'FAILED: delete {record_type} for key {api_key_name} on domain {domain}')
+        raise

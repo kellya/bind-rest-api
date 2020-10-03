@@ -2,3 +2,5 @@
 config.env
 apikeys.pass
 __pycache__
+*.log
+*.log.*
