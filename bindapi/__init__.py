@@ -9,13 +9,13 @@ import dns.name
 import os
 import functools
 import traceback
-from pathlib import Path
+import pathlib
 from typing import Optional, List, Tuple
 from enum import Enum
 from collections import defaultdict
-from fastapi import FastAPI, HTTPException, Security, Depends, Query
+from fastapi import FastAPI, HTTPException, Security, Depends, Query, Path
 from fastapi.security.api_key import APIKey, APIKeyHeader
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # Set up some variables
@@ -26,7 +26,7 @@ VALID_ZONES   = [i + '.' for i in os.environ['BIND_ALLOWED_ZONES'].split(',')]
 API_KEYS      = {
     x.split(',', maxsplit=1)[1]: x.split(',', maxsplit=1)[0]
     for x in 
-    filter(lambda x: x[0] != '#', Path(os.environ['API_KEY_FILE']).read_text().split('\n'))
+    filter(lambda x: x[0] != '#', pathlib.Path(os.environ['API_KEY_FILE']).read_text().split('\n'))
 }
 
 # Allowed record types
@@ -38,17 +38,19 @@ class RecordType(str, Enum):
     ns = 'NS'
     txt = 'TXT'
     soa = 'SOA'
-
 # Record
 class Record(BaseModel):
-    response: str
+    response: str = Field(..., example='10.9.1.135')
     rrtype: RecordType
-    ttl: int = 3600
+    ttl: int = Field(3600, example=3600)
+
 
 # Some wrappers
 asyncresolver = dns.asyncresolver.Resolver()
 asyncresolver.nameservers = [DNS_SERVER]
 tcpquery = functools.partial(dns.asyncquery.tcp, where=DNS_SERVER)
+# Used to properly fix unqualified domains
+qualify = lambda s: f'{s}.' if not s.endswith('.') else s
 
 # Set up app
 app = FastAPI()
@@ -64,12 +66,11 @@ async def check_api_key(api_key_header: str = Security(api_key_header)) -> str:
 
 
 @app.get('/dns/zone/{zone_name}')
-def get_zone(zone_name: str, api_key_name: APIKey = Depends(check_api_key)):
+def get_zone(zone_name: str = Path(..., example='example.org.'), api_key_name: APIKey = Depends(check_api_key)):
     '''Get the json representation of a whole dns zone using 
     axfr
     '''
-    if not zone_name.endswith('.'):  # make sure the zone is qualified
-        zone_name = f'{zone_name}.'
+    zone_name = qualify(zone_name)
 
     if zone_name not in VALID_ZONES:
         raise HTTPException(400, 'zone file not permitted')
@@ -99,7 +100,7 @@ def get_zone(zone_name: str, api_key_name: APIKey = Depends(check_api_key)):
 
 
 @app.get('/dns/record/{domain}')
-async def get_record(domain: str, record_type: List[RecordType] = Query(list(RecordType)), api_key_name: APIKey = Depends(check_api_key)):
+async def get_record(domain: str = Path(..., example='server.example.org.'), record_type: List[RecordType] = Query(list(RecordType)), api_key_name: APIKey = Depends(check_api_key)):
     if not domain.endswith('.'):  # make sure the domain is qualified
         domain = f'{domain}.'
 
@@ -117,9 +118,8 @@ async def get_record(domain: str, record_type: List[RecordType] = Query(list(Rec
     return records
         
 
-async def dns_update_helper(domain: str):
-    if not domain.endswith('.'):  # make sure the domain is qualified
-        domain = f'{domain}.'
+async def dns_update_helper(domain: str = Path(..., example='server.example.org.')):
+    domain = qualify(domain)
 
     zone = b'.'.join(dns.name.from_text(domain).labels[1:]).decode()
     if zone not in VALID_ZONES:
@@ -138,14 +138,11 @@ async def create_record(
     domain, action = helper
 
     action.add(dns.name.from_text(domain), record.ttl, record.rrtype, record.response)
-
     try:
-        response = await tcpquery(action)
-    except Exception as e:
+        await tcpquery(action)
+    except Exception:
         traceback.print_exc()
-        return {'error': 'DNS transaction failed - check logs'}
-
-    return {domain: 'DNS request successful'}
+        raise HTTPException(500, 'DNS transaction failed - check logs')
 
 
 @app.put('/dns/record/{domain}')
@@ -157,14 +154,11 @@ async def replace_record(
     domain, action = helper
 
     action.replace(dns.name.from_text(domain), record.ttl, record.rrtype, record.response)
-
     try:
-        response = await tcpquery(action)
-    except Exception as e:
+        await tcpquery(action)
+    except Exception:
         traceback.print_exc()
-        return {'error': 'DNS transaction failed - check logs'}
-
-    return {domain: 'DNS request successful'}
+        raise HTTPException(500, 'DNS transaction failed - check logs')
 
 
 @app.delete('/dns/record/{domain}')
@@ -179,11 +173,7 @@ async def delete_record(
         print(f'deleteing {domain} type {t}')
         action.delete(dns.name.from_text(domain).labels[0].decode(), t)
         try:
-            response = await tcpquery(action)
-        except Exception as e:
+            await tcpquery(action)
+        except Exception:
             traceback.print_exc()
-            return {'error': 'DNS transaction failed - check logs'}
-
-    return {domain: 'DNS request successful'}
-
-
+            raise HTTPException(500, 'DNS transaction failed - check logs')
