@@ -1,0 +1,4 @@
+# Keys are in format:
+# keyname,keypass
+# Lines starting with # are ignored
+testkey,hithere

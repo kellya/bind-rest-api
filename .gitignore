@@ -1,0 +1,4 @@
+.vscode
+config.env
+apikeys.pass
+__pycache__
