@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 # Set up some variables
 DNS_SERVER    = os.environ['BIND_SERVER']
+LOGGING_APPLICATION_NAME = os.environ['LOGGING_APPLICATION_NAME']
 TSIG = dns.tsigkeyring.from_text({os.environ['TSIG_USERNAME']: os.environ['TSIG_PASSWORD']})
 VALID_ZONES   = [i + '.' for i in os.environ['BIND_ALLOWED_ZONES'].split(',')]
 API_KEYS      = {
@@ -31,16 +32,17 @@ API_KEYS      = {
 
 
 # Set up logging
+formatter = logging.Formatter(f"%(asctime)s == {LOGGING_APPLICATION_NAME} == %(message)s", datefmt='%Y-%m-%dT%H:%M%z')
 auditlogger = logging.getLogger('bind-api.audit')
 auditlogger.setLevel(logging.INFO)
-auditlogger.addHandler(logging.handlers.TimedRotatingFileHandler(
-    'dns-api-audit.log', when='M', interval=5
-))
+handler1 = logging.handlers.TimedRotatingFileHandler('dns-api-audit.log', when='D', interval=7)
+handler1.setFormatter(formatter)
+auditlogger.addHandler(handler1)
 logger = logging.getLogger('bind-api')
 logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.handlers.RotatingFileHandler(
-    'dns-api-debug.log', maxBytes=(1024 * 1024 * 100), backupCount=10
-))
+handler2 = logging.handlers.RotatingFileHandler('dns-api-debug.log', maxBytes=(1024 * 1024 * 100), backupCount=10)
+handler2.setFormatter(formatter)
+logger.addHandler(handler2)
 logger.debug('starting up')
 
 # Allowed record types
