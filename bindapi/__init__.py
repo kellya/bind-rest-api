@@ -163,9 +163,9 @@ async def create_record(
             logger.debug(traceback.format_exc())
             raise HTTPException(500, 'DNS transaction failed - check logs')
 
-        auditlogger.info(f'create {record} for key {api_key_name} on domain {domain}')
+        auditlogger.info(f'CREATE {domain} {record.rrtype} {api_key_name} -> {domain} record {record} for key {api_key_name}')
     except:
-        auditlogger.error(f'FAILED: create {record} for key {api_key_name} on domain {domain}')
+        auditlogger.error(f'FAILED:CREATE {record} for key {api_key_name} on domain {domain}')
         raise
 
 
@@ -184,9 +184,9 @@ async def replace_record(
         except Exception:
             logger.debug(traceback.format_exc())
             raise HTTPException(500, 'DNS transaction failed - check logs')
-        auditlogger.info(f'replace {record} for key {api_key_name} on domain {domain}')
+        auditlogger.info(f'REPLACE {domain} {record.rrtype} {api_key_name} -> {domain} record {record} for key {api_key_name}')
     except:
-        auditlogger.error(f'FAILED: replace {record} for key {api_key_name} on domain {domain}')
+        auditlogger.info(f'FAILED:REPLACE {domain} {record.rrtype} {api_key_name} -> {domain} record {record} for key {api_key_name}')
         raise
 
 @app.delete('/dns/record/{domain}')
@@ -206,7 +206,7 @@ async def delete_record(
             except Exception:
                 logger.debug(traceback.format_exc())
                 raise HTTPException(500, 'DNS transaction failed - check logs')
-        auditlogger.info(f'delete {record_type} for key {api_key_name} on domain {domain}')
+        auditlogger.info(f'DELETE {domain} {",".join(record_type)} {api_key_name} -> {domain} record {record_type} for key {api_key_name}')
     except:
-        auditlogger.error(f'FAILED: delete {record_type} for key {api_key_name} on domain {domain}')
+        auditlogger.info(f'FAILED:DELETE {domain} {",".join(record_type)} {api_key_name} -> {domain} record {record_type} for key {api_key_name}')
         raise
