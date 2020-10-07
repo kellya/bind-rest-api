@@ -140,12 +140,11 @@ async def get_record(domain: str = Path(..., example='server.example.org.'), rec
 async def dns_update_helper(domain: str = Path(..., example='server.example.org.')):
     domain = qualify(domain)
 
-    zone = b'.'.join(dns.name.from_text(domain).labels[1:]).decode()
-    if zone not in VALID_ZONES:
-        raise HTTPException(400, 'zone not permitted')
-    
-    action = dns.update.Update(zone, keyring=TSIG)
-    return (domain, action)    
+    for valid_zone in VALID_ZONES:
+        if domain.endswith(valid_zone):
+            action = dns.update.Update(valid_zone, keyring=TSIG)
+            return (domain, action)
+    raise HTTPException(400, 'domain zone not permitted')
 
 
 @app.post('/dns/record/{domain}')
