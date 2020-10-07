@@ -13,7 +13,7 @@ import pathlib
 import logging
 from typing import Optional, List, Tuple
 from enum import Enum
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from fastapi import FastAPI, HTTPException, Security, Depends, Query, Path
 from fastapi.security.api_key import APIKey, APIKeyHeader
 from pydantic import BaseModel, Field
@@ -61,6 +61,7 @@ class Record(BaseModel):
     rrtype: RecordType
     ttl: int = Field(3600, example=3600)
 
+HelperResponse = namedtuple('HelperResponse', 'domain action zone')
 
 # Some wrappers
 asyncresolver = dns.asyncresolver.Resolver()
@@ -143,69 +144,66 @@ async def dns_update_helper(domain: str = Path(..., example='server.example.org.
     for valid_zone in VALID_ZONES:
         if domain.endswith(valid_zone):
             action = dns.update.Update(valid_zone, keyring=TSIG)
-            return (domain, action)
+            return HelperResponse(domain=domain, action=action, zone=valid_zone)
     raise HTTPException(400, 'domain zone not permitted')
 
 
 @app.post('/dns/record/{domain}')
 async def create_record(
             record: Record,
-            helper: Tuple[str, dns.update.Update] = Depends(dns_update_helper),
+            helper: HelperResponse = Depends(dns_update_helper),
             api_key_name: APIKey = Depends(check_api_key),
         ):
-    domain, action = helper
     try:
-        action.add(dns.name.from_text(domain), record.ttl, record.rrtype, record.response)
+        helper.action.add(dns.name.from_text(helper.domain), record.ttl, record.rrtype, record.response)
         try:
-            await tcpquery(action)
+            await tcpquery(helper.action)
         except Exception:
             logger.debug(traceback.format_exc())
             raise HTTPException(500, 'DNS transaction failed - check logs')
 
-        auditlogger.info(f'CREATE {domain} {record.rrtype} {api_key_name} -> {domain} record {record} for key {api_key_name}')
+        auditlogger.info(f'CREATE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}')
     except:
-        auditlogger.error(f'FAILED:CREATE {record} for key {api_key_name} on domain {domain}')
+        auditlogger.error(f'FAILED:CREATE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}')
         raise
 
 
 @app.put('/dns/record/{domain}')
 async def replace_record(
             record: Record,
-            helper: Tuple[str, dns.update.Update] = Depends(dns_update_helper),
+            helper: HelperResponse = Depends(dns_update_helper),
             api_key_name: APIKey = Depends(check_api_key),
         ):
-    domain, action = helper
-
     try:
-        action.replace(dns.name.from_text(domain), record.ttl, record.rrtype, record.response)
+        helper.action.replace(dns.name.from_text(helper.domain), record.ttl, record.rrtype, record.response)
         try:
-            await tcpquery(action)
+            await tcpquery(helper.action)
         except Exception:
             logger.debug(traceback.format_exc())
             raise HTTPException(500, 'DNS transaction failed - check logs')
-        auditlogger.info(f'REPLACE {domain} {record.rrtype} {api_key_name} -> {domain} record {record} for key {api_key_name}')
+        auditlogger.info(f'REPLACE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}')
     except:
-        auditlogger.info(f'FAILED:REPLACE {domain} {record.rrtype} {api_key_name} -> {domain} record {record} for key {api_key_name}')
+        auditlogger.info(f'FAILED:REPLACE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}')
         raise
+
 
 @app.delete('/dns/record/{domain}')
 async def delete_record(
             record_type: List[RecordType] = Query(list(RecordType)),
-            helper: Tuple[str, dns.update.Update] = Depends(dns_update_helper),
+            helper: HelperResponse = Depends(dns_update_helper),
             api_key_name: APIKey = Depends(check_api_key),
         ):
-    domain, action = helper
-
     try:
         for t in record_type:
-            print(f'deleteing {domain} type {t}')
-            action.delete(dns.name.from_text(domain).labels[0].decode(), t)
+            logger.debug(f'deleteing {helper.domain} type {t}')
+            subdomain = helper.domain[0:- (len(helper.zone) + 1)]  # Split off just the subdomain of the zone
+            helper.action.delete(subdomain, t)
             try:
-                await tcpquery(action)
+                await tcpquery(helper.action)
             except Exception:
                 logger.debug(traceback.format_exc())
                 raise HTTPException(500, 'DNS transaction failed - check logs')
-        auditlogger.info(f'DELETE {domain} {",".join(record_type)} {api_key_name} -> {domain} record {record_type} for key {api_key_name}')
+        auditlogger.info(f'DELETE {helper.domain} {",".join(record_type)} {api_key_name} -> {helper.domain} record {record_type} for key {api_key_name}')
     except:
-        auditlogger.info(f'FAILED:DELETE {domain} {",".join(record_type)} {api_key_name} -> {domain} record {record_type} for key {api_key_name}')
+        auditlogger.info(f'FAILED:DELETE {helper.domain} {",".join(record_type)} {api_key_name} -> {helper.domain} record {record_type} for key {api_key_name}')
         raise
