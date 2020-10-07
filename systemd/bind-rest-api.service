@@ -1,0 +1,11 @@
+[Unit]
+Description=BIND Rest API
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/fish /root/bind-rest-api/systemd/runapi.fish
+Restart=on-failure
+
+[Install]
+WantedBy=network.target
