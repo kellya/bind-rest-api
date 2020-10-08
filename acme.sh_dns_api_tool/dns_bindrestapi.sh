@@ -32,7 +32,7 @@ dns_bindrestapi_add() {
   export _H2="Content-Type: application/json"
   data="{\"response\":\"$txtvalue\",\"rrtype\":\"TXT\",\"ttl\":30}"
   _debug "data: $data"
-  response="$(_post "$data" "$bindrestapiurl/dns/record/$fulldomain")"
+  response="$(_post "$data" "$bindrestapi_url/dns/record/$fulldomain")"
   _debug "got response: $response"
 }
 
@@ -58,7 +58,7 @@ dns_bindrestapi_rm() {
   export _H1="X-Api-Key: $bindrestapi_key"
   export _H2="Content-Type: application/json"
   _debug "data: $data"
-  response="$(_post "" "$bindrestapiurl/dns/record/$fulldomain?record_type=TXT" "" "DELETE" )"
+  response="$(_post "" "$bindrestapi_url/dns/record/$fulldomain?record_type=TXT" "" "DELETE" )"
   _debug "got response: $response"
 }
 
