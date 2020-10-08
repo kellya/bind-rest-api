@@ -27,7 +27,7 @@ VALID_ZONES   = [i + '.' for i in os.environ['BIND_ALLOWED_ZONES'].split(',')]
 API_KEYS      = {
     x.split(',', maxsplit=1)[1]: x.split(',', maxsplit=1)[0]
     for x in 
-    filter(lambda x: x[0] != '#', pathlib.Path(os.environ['API_KEY_FILE']).read_text().split('\n'))
+    filter(lambda x: x != '' and x[0] != '#', pathlib.Path(os.environ['API_KEY_FILE']).read_text().split('\n'))
 }
 
 
