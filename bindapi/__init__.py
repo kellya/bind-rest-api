@@ -71,7 +71,7 @@ tcpquery = functools.partial(dns.asyncquery.tcp, where=DNS_SERVER)
 qualify = lambda s: f'{s}.' if not s.endswith('.') else s
 
 # Set up app
-app = FastAPI(title='bind-rest-api', version='v1.0.2')
+app = FastAPI(title='bind-rest-api', version='v1.1.0')
 
 
 # Set up API Key authorization
@@ -110,9 +110,9 @@ def get_zone(zone_name: str = Path(..., example='example.org.'), api_key_name: A
                     result['SOA'][n] = getattr(rdata, n)
         else:
             records[str(name)].append({
-                'Answer': str(rdata),
-                'RecordType': rdata.rdtype.name,
-                'TTL': ttl,
+                'response': str(rdata),
+                'rrtype': rdata.rdtype.name,
+                'ttl': ttl,
             })
     result['records'] = records
     logger.debug(f'api key {api_key_name} requested zone {zone_name} - sending zone')
@@ -188,22 +188,42 @@ async def replace_record(
 
 
 @app.delete('/dns/record/{domain}')
-async def delete_record(
-            record_type: List[RecordType] = Query(list(RecordType)),
+async def delete_single_record(
+            record: Record,
             helper: HelperResponse = Depends(dns_update_helper),
             api_key_name: APIKey = Depends(check_api_key),
         ):
     try:
-        for t in record_type:
-            logger.debug(f'deleteing {helper.domain} type {t}')
-            subdomain = helper.domain[0:- (len(helper.zone) + 1)]  # Split off just the subdomain of the zone
-            helper.action.delete(subdomain, t)
+        helper.action.delete(dns.name.from_text(helper.domain), record.rrtype, record.response)
+        try:
+            await tcpquery(helper.action)
+        except Exception:
+            logger.debug(traceback.format_exc())
+            raise HTTPException(500, 'DNS transaction failed - check logs')
+        auditlogger.info(f'DELETE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}')
+    except:
+        auditlogger.info(f'FAILED:DELETE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}')
+        raise
+
+
+@app.delete('/dns/allrecords/{domain}')
+async def delete_record_type(
+            recordtypes: List[RecordType] = Query(list(RecordType)),
+            helper: HelperResponse = Depends(dns_update_helper),
+            api_key_name: APIKey = Depends(check_api_key),
+        ):
+    try:
+        for rtype in recordtypes:
+            logger.debug(f'deleteing {helper.domain} type {rtype}')
+            helper.action.delete(dns.name.from_text(helper.domain), rtype)
             try:
                 await tcpquery(helper.action)
             except Exception:
                 logger.debug(traceback.format_exc())
                 raise HTTPException(500, 'DNS transaction failed - check logs')
-        auditlogger.info(f'DELETE {helper.domain} {",".join(record_type)} {api_key_name} -> {helper.domain} record {record_type} for key {api_key_name}')
+        auditlogger.info(f'DELETE {helper.domain} {",".join(recordtypes)} {api_key_name} -> {helper.domain} record {recordtypes} for key {api_key_name}')
     except:
-        auditlogger.info(f'FAILED:DELETE {helper.domain} {",".join(record_type)} {api_key_name} -> {helper.domain} record {record_type} for key {api_key_name}')
+        auditlogger.info(f'FAILED:DELETE {helper.domain} {",".join(recordtypes)} {api_key_name} -> {helper.domain} record {recordtypes} for key {api_key_name}')
         raise
+
+

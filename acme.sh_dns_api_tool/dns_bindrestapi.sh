@@ -57,10 +57,8 @@ dns_bindrestapi_rm() {
   _info "deleting record $fulldomain"
   export _H1="X-Api-Key: $bindrestapi_key"
   export _H2="Content-Type: application/json"
+  data="{\"response\":\"$txtvalue\",\"rrtype\":\"TXT\",\"ttl\":30}"
   _debug "data: $data"
-  response="$(_post "" "$bindrestapi_url/dns/record/$fulldomain?record_type=TXT" "" "DELETE" )"
+  response="$(_post "$data" "$bindrestapi_url/dns/record/$fulldomain" "" "DELETE")"
   _debug "got response: $response"
 }
-
-
-
