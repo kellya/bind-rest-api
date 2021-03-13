@@ -2,5 +2,6 @@
 config.env
 apikeys.pass
 __pycache__
+poetry.lock
 *.log
 *.log.*
