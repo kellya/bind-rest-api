@@ -14,7 +14,9 @@ But it adds extra functionality, including:
   * auto-generated API docs and tooling
   * full input validation
 * API Key protection (but still definitely don't expose this to the internet)
+* Audit log of `apikey` ➡ `DNS changes`
 * [acme.sh](https://acme.sh) tooling to generate LetsEncrypt certificates using the API
+* Docker container to make it easier to run: https://hub.docker.com/repository/docker/jaytuckey/bind-rest-api
 
 ## Auto-generated docs
 
