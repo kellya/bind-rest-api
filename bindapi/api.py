@@ -1,5 +1,12 @@
 """ REST api to handle BIND updates via TSIG and Dynamic DNS Updates """
 import os
+import functools
+import traceback
+import pathlib
+import logging
+from typing import List
+from enum import Enum
+from collections import defaultdict, namedtuple
 import dns.tsigkeyring
 import dns.resolver
 import dns.update
@@ -8,16 +15,10 @@ import dns.zone
 import dns.asyncquery
 import dns.asyncresolver
 import dns.name
-import functools
-import traceback
-import pathlib
-import logging
-from typing import Optional, List, Tuple
-from enum import Enum
-from collections import defaultdict, namedtuple
 from fastapi import FastAPI, HTTPException, Security, Depends, Query, Path
 from fastapi.security.api_key import APIKey, APIKeyHeader
 from pydantic import BaseModel, Field
+from .constants import VERSION
 
 
 # Set up some variables
@@ -58,15 +59,17 @@ handler2.setFormatter(formatter)
 logger.addHandler(handler2)
 logger.debug("starting up")
 
-# Allowed record types
+
 class RecordType(str, Enum):
-    a = "A"
-    aaaa = "AAAA"
-    cname = "CNAME"
-    mx = "MX"
-    ns = "NS"
-    txt = "TXT"
-    soa = "SOA"
+    """define allowed record types"""
+
+    A = "A"
+    AAAA = "AAAA"
+    CNAME = "CNAME"
+    MX = "MX"
+    NS = "NS"
+    TXT = "TXT"
+    SOA = "SOA"
 
 
 # Record
@@ -83,20 +86,27 @@ asyncresolver = dns.asyncresolver.Resolver()
 asyncresolver.nameservers = [DNS_SERVER]
 tcpquery = functools.partial(dns.asyncquery.tcp, where=DNS_SERVER)
 # Used to properly fix unqualified domains
-qualify = lambda s: f"{s}." if not s.endswith(".") else s
+
+
+def qualify(domain):
+    """Ensure the domain given ends with a period"""
+    if not domain.endswith("."):
+        domain = f"{domain}."
+    return domain
+
 
 # Set up app
-app = FastAPI(title="bind-rest-api", version="v1.2.0")
+app = FastAPI(title="bind-rest-api", version=VERSION)
 
 
-# Set up API Key authorization
 async def check_api_key(
     api_key_header: str = Security(APIKeyHeader(name="X-Api-Key")),
 ) -> str:
+    """Set up API Key authorization"""
     try:
         return API_KEYS[api_key_header]
-    except KeyError:
-        raise HTTPException(401, "invalid api key")
+    except KeyError as error:
+        raise HTTPException(401, "invalid api key") from error
 
 
 @app.get("/dns/zone/{zone_name}")
@@ -107,7 +117,7 @@ def get_zone(
     """Get the json representation of a whole dns zone using
     axfr
     """
-    logger.debug(f"api key {api_key_name} requested zone {zone_name}")
+    logger.debug("api key %s requested zone %s", api_key_name, zone_name)
 
     zone_name = qualify(zone_name)
 
@@ -145,7 +155,7 @@ def get_zone(
                 }
             )
     result["records"] = records
-    logger.debug(f"api key {api_key_name} requested zone {zone_name} - sending zone")
+    logger.debug("api key %s requested zone %s - sending zone", api_key_name, zone_name)
     return result
 
 
@@ -157,7 +167,10 @@ async def get_record(
 ):
     domain = qualify(domain)
     logger.debug(
-        f"api key {api_key_name} requested domain records {domain} with types {record_type}"
+        "api key %s requested domain records %s with types %s",
+        api_key_name,
+        domain,
+        record_type,
     )
 
     if not domain.endswith(tuple(VALID_ZONES)):
@@ -199,16 +212,28 @@ async def create_record(
         )
         try:
             await tcpquery(helper.action)
-        except Exception:
+        except Exception as error:
             logger.debug(traceback.format_exc())
-            raise HTTPException(500, "DNS transaction failed - check logs")
+            raise HTTPException(500, "DNS transaction failed - check logs") from error
 
         auditlogger.info(
-            f"CREATE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}"
+            "CREATE %s %s %s -> %s record %s for key %s",
+            helper.domain,
+            record.rrtype,
+            api_key_name,
+            helper.domain,
+            record,
+            api_key_name,
         )
     except:
         auditlogger.error(
-            f"FAILED:CREATE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}"
+            "FAILED:CREATE %s %s %s -> %s record %s for key %s",
+            helper.domain,
+            record.rrtype,
+            api_key_name,
+            helper.domain,
+            record,
+            api_key_name,
         )
         raise
 
@@ -228,15 +253,27 @@ async def replace_record(
         )
         try:
             await tcpquery(helper.action)
-        except Exception:
+        except Exception as error:
             logger.debug(traceback.format_exc())
-            raise HTTPException(500, "DNS transaction failed - check logs")
+            raise HTTPException(500, "DNS transaction failed - check logs") from error
         auditlogger.info(
-            f"REPLACE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}"
+            "REPLACE %s %s %s -> %s record %s for key %s",
+            helper.domain,
+            record.rrtype,
+            api_key_name,
+            helper.domain,
+            record,
+            api_key_name,
         )
     except:
         auditlogger.info(
-            f"FAILED:REPLACE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}"
+            "FAILED:REPLACE %s %s %s -> %s record %s for key %s",
+            helper.domain,
+            record.rrtype,
+            api_key_name,
+            helper.domain,
+            record,
+            api_key_name,
         )
         raise
 
@@ -253,15 +290,27 @@ async def delete_single_record(
         )
         try:
             await tcpquery(helper.action)
-        except Exception:
+        except Exception as error:
             logger.debug(traceback.format_exc())
-            raise HTTPException(500, "DNS transaction failed - check logs")
+            raise HTTPException(500, "DNS transaction failed - check logs") from error
         auditlogger.info(
-            f"DELETE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}"
+            "DELETE %s %s %s -> %s record %s for key %s",
+            helper.domain,
+            record.rrtype,
+            api_key_name,
+            helper.domain,
+            record,
+            api_key_name,
         )
     except:
         auditlogger.info(
-            f"FAILED:DELETE {helper.domain} {record.rrtype} {api_key_name} -> {helper.domain} record {record} for key {api_key_name}"
+            "FAILED:DELETE %s %s %s -> %s record %s for key %s",
+            helper.domain,
+            record.rrtype,
+            api_key_name,
+            helper.domain,
+            record,
+            api_key_name,
         )
         raise
 
@@ -274,18 +323,32 @@ async def delete_record_type(
 ):
     try:
         for rtype in recordtypes:
-            logger.debug(f"deleteing {helper.domain} type {rtype}")
+            logger.debug("deleteing %s type %s", helper.domain, rtype)
             helper.action.delete(dns.name.from_text(helper.domain), rtype)
             try:
                 await tcpquery(helper.action)
-            except Exception:
+            except Exception as error:
                 logger.debug(traceback.format_exc())
-                raise HTTPException(500, "DNS transaction failed - check logs")
+                raise HTTPException(
+                    500, "DNS transaction failed - check logs"
+                ) from error
         auditlogger.info(
-            f'DELETE {helper.domain} {",".join(recordtypes)} {api_key_name} -> {helper.domain} record {recordtypes} for key {api_key_name}'
+            "DELETE %s %s %s -> %s record %s for key %s",
+            helper.domain,
+            ",".join(recordtypes),
+            api_key_name,
+            helper.domain,
+            recordtypes,
+            api_key_name,
         )
     except:
         auditlogger.info(
-            f'FAILED:DELETE {helper.domain} {",".join(recordtypes)} {api_key_name} -> {helper.domain} record {recordtypes} for key {api_key_name}'
+            "FAILED:DELETE %s %s %s -> %s record %s for key %s",
+            helper.domain,
+            ",".join(recordtypes),
+            api_key_name,
+            helper.domain,
+            recordtypes,
+            api_key_name,
         )
         raise
