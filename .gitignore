@@ -6,3 +6,4 @@ poetry.lock
 *.log
 *.log.*
 .*.swp
+dist
