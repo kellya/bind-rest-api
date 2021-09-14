@@ -10,7 +10,7 @@ This is a BIND API that allows the following functionality:
 This project is inspired by [https://github.com/dmyerscough/BIND-RESTful](https://github.com/dmyerscough/BIND-RESTful)
 
 But it adds extra functionality, including:
-* using [FastAPI](https://fastapi.tiangolo.com/) instead of Flask as the framwork, which allows:
+* using [FastAPI](https://fastapi.tiangolo.com/) instead of Flask as the framework, which allows:
   * auto-generated API docs and tooling
   * full input validation
 * API Key protection (but still definitely don't expose this to the internet)
@@ -34,14 +34,14 @@ I have made a video of myself setting up the project: https://youtu.be/ZNEtmWhu1
   ```
 ### BIND Server Setup
 
-bind-rest-api utilizes BIND's TSIG functionailty to validate dynamic updates.
+bind-rest-api utilizes BIND's TSIG functionality to validate dynamic updates.
 The first step is to generate a TSIG key on the BIND server, and configure the
 server to use that key.
 
 1. On the bind server, navigate to your named configuration dir.  On Fedora,
    this is `/etc/named` other distros may be different.
 2. Generate a keyfile with `tsig-keygen bindapi > bindapi.tsig`.  the "bindapi" part can be
-   whatever you choose, this is they name of the key and will be what you will
+   whatever you choose, this is the name of the key and will be what you will
    use in bind-rest-api's config as the username.
 3. edit your named.conf (probably /etc/named.conf) to include the key that was
    just generated.  At the top add `include "/etc/named/bindapi.tsig` (alter if
@@ -57,13 +57,14 @@ configuration to connect the two together.
 
 1. Copy the example_config.env to config.env `cp example_config.env config.env`
 2. Edit the config.env
+
     `BIND_SERVER` - Set this to your BIND server's name or IP
 
     `TSIG_USERNAME` - This will be the keyname from the bindapi.tsig generated
     in the "BIND Server Setup" above
 
     `TSIG_PASSWORD` - this is the "secret" value from the bindapi.tsig file
-    genereated in the "BIND Server Setup" above.
+    generated in the "BIND Server Setup" above.
 
     `BIND_ALLOWED_ZONES` - Comma separated list of zones that bind-rest-api
     should be allowed to modify.
@@ -92,13 +93,13 @@ INFO:     Started server process [35940]INFO:     Waiting for application startu
 ```
 
 This has started on localhost port 8000 by default.  If you are running on a
-diffrent host than you are accessing the API from, you will need to bind to a
+different host than you are accessing the API from, you will need to bind to a
 different IP address.  Instead you may start with:
 
 `bindapi.py --host 0.0.0.0`
 That will listen on all IP addresses (again, on the default port 8000)
 
-3.  Finally, browse to whatever Uvicorn is running on /docs. Assuming localhost,
+3.  Finally, browse to /docs of whatever Uvicorn is running on. Assuming the default localhost,
     that means [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
 At this point you should see FastAPI's swagger documentation where you can hit
