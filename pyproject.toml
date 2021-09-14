@@ -13,6 +13,8 @@ uvicorn = "^0.13.4"
 
 [tool.poetry.dev-dependencies]
 pylint = "^2.7.2"
+coverage = "^5.5"
+pytest = "^6.2.5"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

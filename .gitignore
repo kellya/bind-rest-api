@@ -7,3 +7,4 @@ poetry.lock
 *.log.*
 .*.swp
 dist
+.coverage
