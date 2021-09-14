@@ -18,13 +18,6 @@ But it adds extra functionality, including:
 * [acme.sh](https://acme.sh) tooling to generate LetsEncrypt certificates using the API
 * Docker container to make it easier to run: https://hub.docker.com/r/jaytuckey/bind-rest-api
 
-## Auto-generated docs
-
-By using FastAPI this project get's auto-generated Swagger-UI docs:
-![auto docs 1](img/bind-rest-api-01.png)
-
-![auto docs 2](img/bind-rest-api-02.png)
-
 ## Getting set up and running
 
 I have made a video of myself setting up the project: https://youtu.be/ZNEtmWhu1HI
@@ -39,7 +32,6 @@ I have made a video of myself setting up the project: https://youtu.be/ZNEtmWhu1
   dnspython         2.0.0
   fastapi           0.61.1
   ```
-
 ### BIND Server Setup
 
 bind-rest-api utilizes BIND's TSIG functionailty to validate dynamic updates.
@@ -113,7 +105,12 @@ At this point you should see FastAPI's swagger documentation where you can hit
 the "Authorize" button, and enter the password you put in apikeys.pass above and
 test it out.
 
+## Auto-generated docs
 
+By using FastAPI this project get's auto-generated Swagger-UI docs:
+![auto docs 1](img/bind-rest-api-01.png)
+
+![auto docs 2](img/bind-rest-api-02.png)
 
 ### Keys and Flow
 There are two flows that need keys:
