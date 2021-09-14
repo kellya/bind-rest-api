@@ -1,0 +1,9 @@
+[run]
+source =
+    bind_rest_api
+omit =
+    */__init__.py
+
+[report]
+fail_under =
+    80
