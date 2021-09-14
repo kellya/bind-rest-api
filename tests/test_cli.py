@@ -2,6 +2,9 @@
 from click.testing import CliRunner
 from bind_rest_api.cli import main as cli_main
 from bind_rest_api.api.constants import __version__ as cli_version
+import os
+from unittest import mock
+
 
 runner = CliRunner()
 
@@ -37,6 +40,29 @@ def test_port():
     response = runner.invoke(cli_main, ["--dry-run", "--port", "9999"])
     assert response.exit_code == 0
     assert "9999" in response.output
+
+
+def test_bind_server():
+    """verify that a specified --bind-server works"""
+    bind_server = "192.168.0.1"
+    response = runner.invoke(cli_main, ["--dry-run", "--bind-server", bind_server])
+    assert response.exit_code == 0
+    assert bind_server in response.output
+    response = runner.invoke(cli_main, ["--dry-run", "--bind-server", ""])
+    assert "bind server: 127.0.0.1" in response.output
+
+
+@mock.patch.dict(os.environ, {"BIND_SERVER": "192.168.0.1"})
+def test_env_values():
+    """validate behavior with values from environment variables"""
+    response = runner.invoke(
+        cli_main,
+        [
+            "--dry-run",
+        ],
+    )
+    assert response.exit_code == 0
+    assert "bind server: 192.168.0.1" in response.output
 
 
 def test_password():
