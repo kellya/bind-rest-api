@@ -78,8 +78,11 @@ configuration to connect the two together.
    logging to show what key has made modifications, and the keypass will be the
    secret/auth token used to authenticate the key.  These can be anything you
    choose.  For a secure password, it would be a good idea to use a long random
-   string for the keypass.  You could generate one with something like `openssl
-   rand -hex 32`
+   string for the keypass.
+
+   You can use the bindapi cli to generate a key with `bindapi add-key`.  If you
+   want to generate a string that can be directly pasted to the apikeys.pass you
+   could run `bindapi add-key --username username >> apipass.keys`
 
 ### running bind-rest-api
 

@@ -37,3 +37,26 @@ def test_port():
     response = runner.invoke(cli_main, ["--dry-run", "--port", "9999"])
     assert response.exit_code == 0
     assert "9999" in response.output
+
+
+def test_password():
+    """Verify the password generation"""
+    response = runner.invoke(cli_main, ["add-key"])
+    # just generating a key should give a 64 char string
+    assert len(response.output.strip()) == 64
+    response = runner.invoke(cli_main, ["add-key", "-l", "96"])
+    # if we specify a number, we should get that number of chars resturned
+    assert len(response.output.strip()) == 96
+    username = "testuser"
+    response = runner.invoke(cli_main, ["add-key", "-u", username, "-l", "96"])
+    # if we specify a username, it shoudl output that username comma and the
+    # password.  So it should start with username,
+    assert response.output.startswith(f"{username},")
+    # We should get total chars of password_length + username_length + 1 for
+    # the comma
+    assert len(response.output.strip()) == 96 + len(username) + 1
+    response1 = runner.invoke(cli_main, ["add-key"])
+    response2 = runner.invoke(cli_main, ["add-key"])
+    # subsequent calls should generate random data.  There should be no way
+    # this is ever equal.
+    assert response1.output.strip() != response2.output.strip()

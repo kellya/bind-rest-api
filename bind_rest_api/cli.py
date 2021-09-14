@@ -2,9 +2,11 @@
 import click
 import uvicorn
 from bind_rest_api.api.constants import VERSION
+from .password import generate_password
 
 
-@click.command()
+@click.group(name="bindapi", invoke_without_command=True)
+@click.pass_context
 @click.option(
     "--host", "-H", default="127.0.0.1", help="host/IP to bind to for the api service"
 )
@@ -14,9 +16,9 @@ from bind_rest_api.api.constants import VERSION
 @click.option("--workers", "-w", default=3, help="Number of workers to deploy")
 @click.option("--dry-run", "-n", is_flag=True, help="Do not actually run - for testing")
 @click.version_option(version=VERSION)
-def main(host, port, workers, dry_run):
+def main(ctx, host, port, workers, dry_run):
     """main logic for the cli"""
-    if not dry_run:  # pragma: no cover
+    if not dry_run and not ctx.invoked_subcommand:  # pragma: no cover
         uvicorn.run(
             "bind_rest_api.api.api:app",
             host=host,
@@ -25,11 +27,25 @@ def main(host, port, workers, dry_run):
             debug=True,
             workers=workers,
         )
-    else:
+    elif dry_run and not ctx.invoked_subcommand:
         print("would run with the following options:")
         print(f"host: {host}")
         print(f"port: {port}")
         print(f"workers: {workers}")
+
+
+@main.command()
+@click.option("--username", "-u", default=None, help="Generate a username")
+@click.option(
+    "--length", "-l", default=64, help="Specify length of password to generate"
+)
+def add_key(username, length):
+    """Create a key to add to the api keys"""
+    password = generate_password(length)
+    if username:
+        print(f"{username},{password}")
+    else:
+        print(password)
 
 
 if __name__ == "__main__":
