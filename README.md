@@ -29,6 +29,17 @@ By using FastAPI this project get's auto-generated Swagger-UI docs:
 
 I have made a video of myself setting up the project: https://youtu.be/ZNEtmWhu1HI
 
+* Clone the bind-rest-api repo locally, and cd into your clone.
+* Make sure you have python 3 and [poetry](https://python-poetry.org/) installed.
+* From within the bind-rest-api clone, run `poetry install` to install all the required dependencies.
+  * Poetry will try to install into a virtualenv
+  * You can activate the auto-created virtualenv with `poetry shell`
+  * Once actived you should see the dependencies with `pip list`. Make sure you see lines like:
+  ```
+  dnspython         2.0.0
+  fastapi           0.61.1
+  ```
+
 ### BIND Server Setup
 
 bind-rest-api utilizes BIND's TSIG functionailty to validate dynamic updates.
@@ -103,19 +114,6 @@ the "Authorize" button, and enter the password you put in apikeys.pass above and
 test it out.
 
 
-* Make sure you have python 3 and [poetry](https://python-poetry.org/) installed.
-* From within the folder, run `poetry install` to install all the required dependencies.
-  * Poetry will try to install into a virtualenv
-  * You can activate the auto-created virtualenv with `poetry shell`
-  * Once actived you should see the dependencies with `pip list`. Make sure you see lines like:
-  ```
-  dnspython         2.0.0
-  fastapi           0.61.1
-  ```
-* copy the `example_config.env` and `example_apikeys.pass` files to `config.env` and `apikeys.pass`
-* Customise the files and set the values you need. Make sure to generate very long api keys.
-* export all the environment variables in `config.env` - (try `export $(cat config.env)` in bash)
-* run the api with uvicorn - `uvicorn bindapi:app`
 
 ### Keys and Flow
 There are two flows that need keys:
