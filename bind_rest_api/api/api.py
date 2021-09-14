@@ -74,6 +74,8 @@ class RecordType(str, Enum):
 
 # Record
 class Record(BaseModel):
+    """DNS Record"""
+
     response: str = Field(..., example="10.9.1.135")
     rrtype: RecordType
     ttl: int = Field(3600, example=3600)
@@ -133,7 +135,7 @@ def get_zone(
             result["SOA"] = {
                 "ttl": ttl,
             }
-            for n in (
+            for field_name in (
                 "expire",
                 "minimum",
                 "refresh",
@@ -142,10 +144,10 @@ def get_zone(
                 "mname",
                 "serial",
             ):
-                if n in ("rname", "mname"):
-                    result["SOA"][n] = str(getattr(rdata, n))
+                if field_name in ("rname", "mname"):
+                    result["SOA"][field_name] = str(getattr(rdata, field_name))
                 else:
-                    result["SOA"][n] = getattr(rdata, n)
+                    result["SOA"][field_name] = getattr(rdata, field_name)
         else:
             records[str(name)].append(
                 {
@@ -162,32 +164,34 @@ def get_zone(
 @app.get("/dns/record/{domain}")
 async def get_record(
     domain: str = Path(..., example="server.example.org."),
-    record_type: List[RecordType] = Query(list(RecordType)),
+    record_types: List[RecordType] = Query(list(RecordType)),
     api_key_name: APIKey = Depends(check_api_key),
 ):
+    """return record from BIND server"""
     domain = qualify(domain)
     logger.debug(
         "api key %s requested domain records %s with types %s",
         api_key_name,
         domain,
-        record_type,
+        record_types,
     )
 
     if not domain.endswith(tuple(VALID_ZONES)):
         raise HTTPException(400, "domain not permitted")
 
     records = defaultdict(list)
-    for t in record_type:
+    for record_type in record_types:
         try:
-            answers = await asyncresolver.resolve(domain, t)
+            answers = await asyncresolver.resolve(domain, record_type)
         except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
             continue
-        records[t] = [str(x) for x in answers.rrset]
+        records[record_type] = [str(x) for x in answers.rrset]
 
     return records
 
 
 async def dns_update_helper(domain: str = Path(..., example="server.example.org.")):
+    """validate a zone and update if allowed, raise exception if not"""
     domain = qualify(domain)
 
     for valid_zone in VALID_ZONES:
@@ -203,6 +207,7 @@ async def create_record(
     helper: HelperResponse = Depends(dns_update_helper),
     api_key_name: APIKey = Depends(check_api_key),
 ):
+    """create a new domain entry"""
     try:
         helper.action.add(
             dns.name.from_text(helper.domain),
@@ -244,6 +249,7 @@ async def replace_record(
     helper: HelperResponse = Depends(dns_update_helper),
     api_key_name: APIKey = Depends(check_api_key),
 ):
+    """update an existing record"""
     try:
         helper.action.replace(
             dns.name.from_text(helper.domain),
@@ -284,6 +290,7 @@ async def delete_single_record(
     helper: HelperResponse = Depends(dns_update_helper),
     api_key_name: APIKey = Depends(check_api_key),
 ):
+    """delete a dns record"""
     try:
         helper.action.delete(
             dns.name.from_text(helper.domain), record.rrtype, record.response
@@ -321,6 +328,7 @@ async def delete_record_type(
     helper: HelperResponse = Depends(dns_update_helper),
     api_key_name: APIKey = Depends(check_api_key),
 ):
+    """delete all of record type"""
     try:
         for rtype in recordtypes:
             logger.debug("deleteing %s type %s", helper.domain, rtype)

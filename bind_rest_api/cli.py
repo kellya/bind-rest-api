@@ -1,3 +1,4 @@
+""" cli entry point for setting up the fastapi app with options passed"""
 import click
 import uvicorn
 from bind_rest_api.api.constants import VERSION
@@ -13,6 +14,7 @@ from bind_rest_api.api.constants import VERSION
 @click.option("--workers", "-w", default=3, help="Number of workers to deploy")
 @click.version_option(version=VERSION)
 def main(host, port, workers):
+    """main logic for the cli"""
     uvicorn.run(
         "bind_rest_api.api.api:app",
         host=host,
@@ -24,4 +26,4 @@ def main(host, port, workers):
 
 
 if __name__ == "__main__":
-    main()
+    main()  # pylint: disable=no-value-for-parameter
