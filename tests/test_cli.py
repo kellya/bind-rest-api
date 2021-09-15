@@ -1,9 +1,9 @@
 """ test the cli functionality """
+import os
+from unittest import mock
 from click.testing import CliRunner
 from bind_rest_api.cli import main as cli_main
 from bind_rest_api.api.constants import __version__ as cli_version
-import os
-from unittest import mock
 
 
 runner = CliRunner()
@@ -11,7 +11,9 @@ runner = CliRunner()
 
 def test_main():
     """validate main runs with successful exit"""
-    response = runner.invoke(cli_main, ["--dry-run"])
+    response = runner.invoke(
+        cli_main, ["--dry-run", "--bind-user", "test", "--bind-pass", "test"]
+    )
     assert response.exit_code == 0
 
 
@@ -52,7 +54,29 @@ def test_bind_server():
     assert "bind server: 127.0.0.1" in response.output
 
 
-@mock.patch.dict(os.environ, {"BIND_SERVER": "192.168.0.1"})
+def test_api_key_file():
+    """verify that a specified --api-key-file works"""
+    response = runner.invoke(cli_main, ["--dry-run", "--api-key-file", "test.pass"])
+    assert response.exit_code == 0
+    assert "test.pass" in response.output
+    response = runner.invoke(
+        cli_main,
+        [
+            "--dry-run",
+        ],
+    )
+    assert response.exit_code == 0
+    assert "apikeys.pass" in response.output
+
+
+@mock.patch.dict(
+    os.environ,
+    {
+        "BIND_SERVER": "192.168.0.1",
+        "TSIG_USERNAME": "testuser",
+        "TSIG_PASSWORD": "testpass",
+    },
+)
 def test_env_values():
     """validate behavior with values from environment variables"""
     response = runner.invoke(
