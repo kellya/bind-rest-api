@@ -5,6 +5,7 @@ import click
 import uvicorn
 from bind_rest_api.api.constants import VERSION
 from .password import generate_password
+from .api import api
 
 
 @click.group(name="bindapi", invoke_without_command=True)
@@ -89,6 +90,8 @@ def main(
     if not dry_run and not ctx.invoked_subcommand:  # pragma: no cover
         # We can't assume TSIG values, if they aren't in env or passed via
         # options just error out
+        # !!!!! This check isn't needed, the prompt option is going to force
+        # this.  Leaving it for now.
         if not bind_pass or not bind_user:
             print(
                 "Error BIND TSIG information was not given\n"
@@ -96,6 +99,7 @@ def main(
                 " or you must specify --bind-user and --bind-password"
             )
             sys.exit(1)
+        DNS_SERVER = bind_server
         uvicorn.run(
             "bind_rest_api.api.api:app",
             host=host,
@@ -105,23 +109,31 @@ def main(
             workers=workers,
         )
     elif dry_run and not ctx.invoked_subcommand:
-        print("would run with the following options:")
-        print()
+        # Set colors for styled output
+        # row heading color
+        hcolor = "blue"
+        # text color, the value of the row heading
+        tcolor = "cyan"
         click.echo(click.style("              API", bold=True))
-        print(f"         host: {host}")
-        print(f"         port: {port}")
-        print(f"      workers: {workers}")
-        print(f" api key file: {api_key_file}")
-        print()
+        click.echo(click.style("         host: ", fg=hcolor), nl=False)
+        click.echo(click.style(host, fg=tcolor))
+        click.echo(click.style("         port: ", fg=hcolor), nl=False)
+        click.echo(click.style(str(port), fg=tcolor))
+        click.echo(click.style("      workers: ", fg=hcolor), nl=False)
+        click.echo(click.style(str(workers), fg=tcolor))
+        click.echo(click.style(" api key file: ", fg=hcolor), nl=False)
+        click.echo(click.style(api_key_file, fg=tcolor))
         click.echo(click.style("          BIND Server", bold=True))
-        print(f"  bind server: {bind_server}")
-        print(f"         port: {port}")
-        print(f"    TSIG user: {bind_user}")
-        print(f"    TSIG pass: {bind_pass}")
+        click.echo(click.style("  bind server: ", fg=hcolor), nl=False)
+        click.echo(click.style(bind_server, fg=tcolor))
+        click.echo(click.style("    TSIG user: ", fg=hcolor), nl=False)
+        click.echo(click.style(bind_user, fg=tcolor))
+        click.echo(click.style("    TSIG pass: ", fg=hcolor), nl=False)
+        click.echo(click.style(bind_pass, fg=tcolor))
 
 
 @main.command()
-@click.option("--username", "-u", default=None, help="Generate a username")
+@click.option("--username", "-u", default=None, help="Specify a username")
 @click.option(
     "--length",
     "-l",
