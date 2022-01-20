@@ -73,7 +73,7 @@ tcpquery = functools.partial(dns.asyncquery.tcp, where=DNS_SERVER)
 qualify = lambda s: f'{s}.' if not s.endswith('.') else s
 
 # Set up app
-app = FastAPI(title='bind-rest-api', version='v1.2.0')
+app = FastAPI(title='bind-rest-api', version='v1.3.0')
 
 
 # Set up API Key authorization
