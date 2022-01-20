@@ -55,6 +55,7 @@ class RecordType(str, Enum):
     ns = 'NS'
     txt = 'TXT'
     soa = 'SOA'
+    ptr = 'PTR'
 
 # Record
 class Record(BaseModel):
